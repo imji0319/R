@@ -1,0 +1,160 @@
+---
+title: "2017 US Baseball_Major"
+output: html_document
+---
+
+#Q1.각 10년 단위로 경기 당 평균 홈런 수
+
+
+```{r}
+teams<-read.csv("./baseballdatabank-2017.1/baseballdatabank-2017.1/core/Teams.csv",header=T)
+
+```
+
+## 각 10년 주기로 경기당 평균 홈런 수를 계산  
+
+-> 우선 10년 단위로 데이터 집합을 분리  
+
+-> 분리된 각 데이터 집합에 대한 전체 홈런 수를 각 데이터 집합 내 총 경기 수로 나눔  
+ 
+```{r comment=NA}
+names(teams)
+summary(teams$yearID)
+```
+
+해당년도가 가령 1990년대 속하는지를 확인하려면,  
+해당 년도를 1990으로 나눈 나머지가 0~9에 있는지 확인 하면 된다. 만약 1989년이라면
+
+```{r comment=NA}
+1989%%1990
+1997%%1990
+2016%%1990
+```
+
+위 결과를 보면 해당 연도를 10년 단위로 분리하기 위해서는  
+각 연도의 첫해로 나눈 나머지가 사이에 있으면 10년 단위로 분리가 가능
+각 연도의 첫해를 sequence범위로 생성
+```{r comment=NA}
+set_range<-seq(from=1870,to=2010, by=10)
+set_range 
+```
+
+terms 데이터의 각 해당년도를 seq_range로부터 하나씩 불러와 나눈 나머지가 0-9에 속하는지 확인
+```{r comment=NA}
+for (i in set_range){
+  decade<-teams$yearID %%i
+  sub_teams <- subset(teams, (0 <= decade) & (decade <= 9))
+}
+```
+
+각 decade에 대한 경기수 계산
+- teams의 Field에서 경기수와 관련된 Field는 G와Ghome이 있음
+- G는 해당 팀이 치훈 총 경기수
+- Ghome 는 해당 팀의 홈 경기수
+- 총 경기수는 Ghome의 합계 또는 G의 합계를 2로 나누어 사용하면 됨
+
+
+decade별 경기당 평균 홈런 수 계산을 위한 데이터 프레임 준비
+```{r comment=NA}
+avg_hrs_decade <- data.frame(matrix(ncol =2, nrow=1))
+names(avg_hrs_decade) <- base::c("decade","hr")
+
+
+avg_hrs_decade
+```
+
+yearID를 각 연도별로 분리하고 연도별 경기당 평균 홈런 수 계산
+해당 data를 avg_hrs_decade에 저장
+
+```{r comment=NA}
+rowIndex<-0
+for (i in set_range){
+  decade<-teams$yearID%%i
+  sub_teams<-subset(teams,(0<=decade)&(decade<=9))  #0 <= decade <= 9 
+  
+  num_games<-sum(sub_teams$G)/2
+  num_hrs<-sum(sub_teams$HR)                        #총 홈런 갯수
+  avg_hrs<-num_hrs/num_games                        #한 경기당 평균 홈런 수 
+  
+  rowIndex<-rowIndex+1
+  avg_hrs_decade[rowIndex,]<-c(i,avg_hrs)
+}
+
+```
+###결과 확인
+```{r comment=NA}
+avg_hrs_decade
+```
+
+###해당 자료 이용하여 그래프 작성
+```{r include=FALSE}
+library(plotly)
+```
+
+```{r comment=NA, warning=FALSE,message=FALSE}
+p<-plotly::plot_ly(data=avg_hrs_decade,
+                   x=~decade,
+                   y=~hr,
+                   type="scatter",
+                   mode="lines+markers",
+                   line=list(color='rgb(205,12,24)',width=3)) %>% 
+  layout(title="Average Homeruns per Game each Decade",
+         xasis=list(title="Decade"),
+         yasis=list(title="Average Homeruns"),
+         ylim=c(0,2.5))
+p
+```
+
+#Q2.각 10년 단위로 경기 당 평균 삼진 갯수
+
+decade별 경기당 평균 삼진 수 계산을 위한 데이터 프레임 준비
+```{r comment=NA}
+avg_so_decade <- data.frame(matrix(ncol =2, nrow=1))
+names(avg_so_decade) <- base::c("decade","so")
+
+
+avg_so_decade
+```
+
+yearID를 각 연도별로 분리하고 연도별 경기당 평균 삼진 수 계산  
+해당 data를 avg_hrs_decade에 저장
+
+```{r comment=NA}
+rowIndex<-0
+for (i in set_range){
+  decade<-teams$yearID%%i
+  sub_teams<-subset(teams,(0<=decade)&(decade<=9))
+  
+  num_games<-sum(sub_teams$G)/2
+  num_hrs<-sum(sub_teams$SO)
+  avg_hrs<-num_hrs/num_games
+  
+  rowIndex<-rowIndex+1
+  avg_so_decade[rowIndex,]<-c(i,avg_hrs)
+}
+```
+
+###결과 확인
+```{r comment=NA}
+avg_so_decade
+```
+
+###해당 자료 이용하여 그래프 작성
+```{r comment=NA,warning=FALSE,message=FALSE}
+p<-plotly::plot_ly(data=avg_so_decade,
+                   x=~decade,
+                   y=~so,
+                   type="scatter",
+                   mode="lines+markers",
+                   line=list(color='rgb(205,12,24)',width=3))%>% 
+  layout(title="Average StrikeOut per Game each Decade",
+         xasis=list(title="Decade"),
+         yasis=list(title="Average StrikeOut"),
+         ylim=c(0,2.5))
+p
+```
+
+
+
+
+
