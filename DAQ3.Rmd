@@ -1,0 +1,123 @@
+---
+title: "Q3. 어떤 연령대의 평균월급이 가장 많을까?  "
+output: html_document
+---
+
+```{r,eval=FALSE,echo=FALSE}
+install.packages("foreign") #spss 파일을 읽을 수 잇도록 도와주는 라이브러리 
+```
+
+```{r, include=FALSE}
+library(foreign)
+library(dplyr)              #전처리
+library(ggplot2)            #시각화
+library(readxl)             #엑셀 파일 
+
+```
+
+####분석과정
+1. 데이터 준비 단계  
+-  데이터 구조 및 확인  
+ 
+2. 데이터 전처리 단계   
+-  필요한 변수 검토 및 전처리, 변수 간의 관계 분석 
+
+3. 데이터 분석 단계  
+-  새로운 요약 테이블 생성, 그래프 시각화 
+
+
+한국복지패널데이터
+```{r comment=NA,warning=FALSE}
+raw_welfare<-read.spss(file="./R_TEMP/Koweps_hpc10_2015_beta1.sav", #spss 파일 
+                      to.data.frame=T)                     #to.data.frame=T : 옵션 사용하지 않으면 
+welfare<-raw_welfare
+```
+
+```{r comment=NA}
+welfare<-rename(welfare,                #데이터
+               sex=h10_g3,              #성별 
+               birth=h10_g4,            #태어난 연도
+               marriage=h10_g10,        #혼인상태
+               income=p1002_8aq1,       #평균 월급
+               religion=h10_g11,        #종교 여부
+               code_job=h10_eco9,       #직종 코드
+               code_region=h10_reg7)    #지역 코드 
+```
+
+####사용 변수 전처리 단계
+
+파생변수 나이 age
+```{r comment=NA, message=FALSE}
+welfare$age <- 2015 - welfare$birth +1
+summary(welfare$age)                   
+qplot(welfare$age)                     
+```
+1. 변수 검토
+2. 이상치 제거
+3. 파생변수 만들기 agag : 초년 - 30세 미만 /중년 - 30~59세 / 노년 -  60세 이상 
+```{r comment=NA}
+welfare <- welfare %>% mutate(ageg=ifelse(age < 30 ,"young",
+                                          ifelse(age<=59,"middle","old"))) 
+table(welfare$ageg)
+qplot(welfare$ageg)
+```
+
+
+월급 income 
+1. 변수 검토
+2. 이상치 제거
+ 
+```{r eval=FALSE,echo=FALSE}
+class(welfare$income)                  #변수 속성
+summary(welfare$income)                #데이터 요약 통계량 -> 이상치 확인 
+qplot(welfare$income) + xlim(0,1000)   #데이터 확인을 위한 그래프로 범위 제한 (xlim)
+welfare$income<-ifelse(welfare$income %in% c(0,9999),NA,welfare$income)   #0,9999 -> NA
+table(is.na(welfare$income))
+```
+
+----
+
+####데이터 분석 단계
+연령대 월급 평균표
+```{r comment=NA}
+ageg_income<- welfare %>%               
+  filter(!is.na(income)) %>%            #NA 값 제외
+  group_by(ageg) %>%                    #ageg에 따라 그룹화
+  summarise(mean_income=mean(income))   #ageg에 따른 income 평균 
+
+ageg_income
+```
+
+
+연령대에 따른 평균월급 그래프 
+```{r comment=NA}
+ggplot(data=ageg_income, aes(x=ageg, y=mean_income)) +
+  geom_col()                            
+```      
+
+--> 그래프에 데이터가 나타나는 값의 순서를 지정할 때 scale_x_discrete(limits=c())
+```{r comment=NA}
+ggplot(data=ageg_income, aes(x=ageg, y=mean_income)) +
+  geom_col() +                          
+  scale_x_discrete(limits=c("young","middle","old"))  
+```
+
+
+###결과 
+->  초년, 중년, 노년에 따라 월급의 차이가 있으며 중년(30~59세) 때 가장 높다. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

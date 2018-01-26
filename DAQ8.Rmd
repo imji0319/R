@@ -1,0 +1,146 @@
+---
+title: "Q8. 종교 유무에 따른 이혼율"
+output: html_document
+---
+
+```{r,eval=FALSE,echo=FALSE}
+install.packages("foreign") #spss 파일을 읽을 수 잇도록 도와주는 라이브러리 
+```
+
+```{r, include=FALSE}
+library(foreign)
+library(dplyr)              #전처리
+library(ggplot2)            #시각화
+library(readxl)             #엑셀 파일 
+
+```
+
+####분석과정
+1. 데이터 준비 단계  
+-  데이터 구조 및 확인  
+ 
+2. 데이터 전처리 단계   
+-  필요한 변수 검토 및 전처리, 변수 간의 관계 분석 
+
+3. 데이터 분석 단계  
+-  새로운 요약 테이블 생성, 그래프 시각화 
+
+
+한국복지패널데이터
+```{r comment=NA,warning=FALSE}
+raw_welfare<-read.spss(file="./R_TEMP/Koweps_hpc10_2015_beta1.sav", #spss 파일 
+                      to.data.frame=T)                     #to.data.frame=T : 옵션 사용하지 않으면 
+welfare<-raw_welfare
+```
+
+```{r comment=NA}
+welfare<-rename(welfare,                #데이터
+               sex=h10_g3,              #성별 
+               birth=h10_g4,            #태어난 연도
+               marriage=h10_g10,        #혼인상태
+               income=p1002_8aq1,       #평균 월급
+               religion=h10_g11,        #종교 여부
+               code_job=h10_eco9,       #직종 코드
+               code_region=h10_reg7)    #지역 코드 
+```
+
+
+< 정제 변수 : sex, birth, income, age, ageg, code_job, job >
+```{r include=FALSE}
+welfare$sex <-ifelse(welfare$sex==9,NA,welfare$sex)
+welfare$sex<-ifelse(welfare$sex == 1 ,'male','female')
+welfare$income<-ifelse(welfare$income %in% c(0,9999),NA,welfare$income)
+welfare$birth<-ifelse(welfare$birth==9999,NA,welfare$birth)
+welfare$age <- 2015 - welfare$birth +1
+welfare$income<-ifelse(welfare$income %in% c(0,9999),NA,welfare$income)
+age_income<-welfare %>% 
+  filter(!is.na(income)) %>%          
+  group_by(age) %>%                    
+  summarise(mean_income=mean(income))
+welfare <- welfare %>% mutate(ageg=ifelse(age < 30 ,"young",
+                                          ifelse(age<=59,"middle","old"))) 
+list_job<-read_excel("./R_TEMP/Koweps_Codebook.xlsx",
+                     col_name=T,sheet=2) 
+welfare <- left_join(welfare,list_job,
+                     id="code_job")    
+
+```
+
+---------------------------------------------------
+
+####사용 변수 전처리 단계  
+
+종교 religion : 1 : 있음 / 2:  없음  * 무응답 : 9 
+
+1. 변수 검토
+```{r comment=NA}
+class(welfare$religion)           #numeric
+table(welfare$religion)           #1-8047, 2 - 8617
+```
+
+2. 이상치 제거
+```{r eval=FALSE}
+welfare$religion<-ifelse(welfare$religion==9,NA,welfare$religion) 
+#이상치를 본래 실행해야 하는 코드 이지만 주어진 데이터 확인 결과 9 가 없기 때문에 실행하지 않는다. 
+```
+
+3. 데이터에 이름 부여  
+```{r comment=NA}
+welfare$religion <- ifelse(welfare$religion=="1","yes","no")
+qplot(welfare$religion)
+```
+
+
+혼인상태 marriage 
+0.비해당(18세 미만) 1.유배우 2.사별 3.이혼  
+4.별거5.미혼(18세이상, 미혼모 포함) 6.기타(사망 등)  
+
+1. 변수 검토
+```{r comment=NA}
+class(welfare$marriage)
+table(welfare$marriage)
+```
+2. 이상치 제거
+
+3. 파생변수
+```{r comment=NA}
+welfare$group_marriage<-ifelse(welfare$marriage==1,"marriage",
+                               ifelse(welfare$marriage==3,"divorce",NA))
+```
+```{r comment=NA}
+table(welfare$group_marriage)
+```
+```{r comment=NA}
+table(is.na(welfare$group_marriage))
+```
+
+----
+####데이터 분석 단계 
+
+종교 유무에 따른 이혼율 표 
+```{r comment=NA}
+religion_marriage <- welfare %>% 
+  filter(!is.na(group_marriage)) %>%         # NA 값 제외 
+  group_by(religion, group_marriage) %>%     # 종교와 기혼/이혼 에 따른 그룹
+  summarise(n=n()) %>%                       # 종교 유무에 따른 기혼/이혼의 수    
+  mutate(tot_group = sum(n),                 # tot_group : 종교에 따른 합
+         pct=round(n/tot_group*100,1))       # pct : 종교에 따른 기혼/이혼의 비율 
+religion_marriage  
+```
+
+
+종교 유무에 따른 이혼율 표에서 이혼에 해당하는 데이터만  추출 
+```{r comment=NA}
+divorce <- religion_marriage %>% 
+  filter(group_marriage=="divorce") %>% 
+  select(religion,pct)
+divorce           
+ggplot(data=divorce,aes(x=religion,y=pct))+geom_col()
+```
+
+
+### 결과
+-> 종교에 따른 이혼율의 차이가 잇지만 그래프상 크게 나타나진 않는다.
+
+
+

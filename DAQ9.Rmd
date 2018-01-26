@@ -1,0 +1,130 @@
+---
+title: "Q8_1. 연령대 및 종교 유무에 따른 이혼율 분석 하기"
+output: html_document
+---
+```{r,eval=FALSE,echo=FALSE}
+install.packages("foreign") #spss 파일을 읽을 수 잇도록 도와주는 라이브러리 
+```
+
+```{r, include=FALSE}
+library(foreign)
+library(dplyr)              #전처리
+library(ggplot2)            #시각화
+library(readxl)             #엑셀 파일 
+
+```
+
+####분석과정
+1. 데이터 준비 단계  
+-  데이터 구조 및 확인  
+ 
+2. 데이터 전처리 단계   
+-  필요한 변수 검토 및 전처리, 변수 간의 관계 분석 
+
+3. 데이터 분석 단계  
+-  새로운 요약 테이블 생성, 그래프 시각화 
+
+
+한국복지패널데이터
+```{r comment=NA,warning=FALSE}
+raw_welfare<-read.spss(file="./R_TEMP/Koweps_hpc10_2015_beta1.sav", #spss 파일 
+                      to.data.frame=T)                     #to.data.frame=T : 옵션 사용하지 않으면 
+welfare<-raw_welfare
+```
+
+```{r comment=NA}
+welfare<-rename(welfare,                #데이터
+               sex=h10_g3,              #성별 
+               birth=h10_g4,            #태어난 연도
+               marriage=h10_g10,        #혼인상태
+               income=p1002_8aq1,       #평균 월급
+               religion=h10_g11,        #종교 여부
+               code_job=h10_eco9,       #직종 코드
+               code_region=h10_reg7)    #지역 코드 
+```
+
+
+< 정제 변수 : sex, birth, income, age, ageg, code_job, job, religion , group_marriage>
+```{r include=FALSE}
+welfare$sex <-ifelse(welfare$sex==9,NA,welfare$sex)
+welfare$sex<-ifelse(welfare$sex == 1 ,'male','female')
+welfare$income<-ifelse(welfare$income %in% c(0,9999),NA,welfare$income)
+welfare$birth<-ifelse(welfare$birth==9999,NA,welfare$birth)
+welfare$age <- 2015 - welfare$birth +1
+welfare$income<-ifelse(welfare$income %in% c(0,9999),NA,welfare$income)
+age_income<-welfare %>% 
+  filter(!is.na(income)) %>%          
+  group_by(age) %>%                    
+  summarise(mean_income=mean(income))
+welfare <- welfare %>% mutate(ageg=ifelse(age < 30 ,"young",
+                                          ifelse(age<=59,"middle","old"))) 
+list_job<-read_excel("./R_TEMP/Koweps_Codebook.xlsx",
+                     col_name=T,sheet=2) 
+welfare <- left_join(welfare,list_job,
+                     id="code_job")  
+welfare$religion <- ifelse(welfare$religion=="1","yes","no")
+
+welfare$group_marriage<-ifelse(welfare$marriage==1,"marriage",
+                               ifelse(welfare$marriage==3,"divorce",NA))
+
+
+```
+
+----------------------------------------------------------
+
+
+####사용 변수 전처리 단계 
+
+종교 religion , 연령대 : ageg ,혼인 상태 : marriage  => 전처리 완료 
+1. 변수 검토
+2. 이상치 제거 
+
+----
+
+####데이터 분석 단계
+연령대, 종교, 혼인상태를 확인 변수
+```{r comment=NA}
+ageg_re_marriage <- welfare %>% 
+  filter(!is.na(group_marriage)) %>%           #혼인상태가 NA가 아닌 것만 추출 
+  group_by(ageg,religion,group_marriage) %>%   #연령대, 종교, 혼인상태에 따라 그룹화 
+  summarise(n=n()) %>%                         #그룹별 개수
+  mutate(tot_total=sum(n),                     #그룹별 합 
+         pct=round(n/tot_total*100,1))         #그룹의 비율   
+
+
+ageg_re_marriage
+```
+
+```{r comment=NA}
+welfare %>% filter(ageg=="young") %>% group_by(marriage) %>% summarise(n=n())
+```
+
+연령층이 중년과 노년, 종교 유무에 의한 이혼 비율표
+```{r comment=NA}
+A_R_divorce <- ageg_re_marriage %>% 
+  filter(group_marriage=="divorce" & ageg != "young") %>%    #연령층이 "young" 은 제외 BUT 이혼상태, 2명 존재 
+  select(ageg,religion,pct)
+A_R_divorce
+```
+```{r comment=NA}
+ggplot(data=A_R_divorce,aes(x=ageg,y=pct,fill=religion))+
+  geom_col(position="dodge")
+```
+
+### 결과 ###
+-> 중년 층에서는 종교가 없는 사람들의 이혼율이 높은 반면 노년층에서는 종교를 가지고 있는 사람들의 이혼율이 더 높다. 그러나 노년 층에서의 차이가 뚜렷하다고 볼 수 는 없다.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,110 @@
+---
+title: "Q5. 나이 및 성별 월급 차이"
+output: html_document
+---
+
+==================================================
+
+```{r,eval=FALSE,echo=FALSE}
+install.packages("foreign") #spss 파일을 읽을 수 잇도록 도와주는 라이브러리 
+```
+
+```{r, include=FALSE}
+library(foreign)
+library(dplyr)              #전처리
+library(ggplot2)            #시각화
+library(readxl)             #엑셀 파일 
+
+```
+
+####분석과정
+1. 데이터 준비 단계  
+-  데이터 구조 및 확인  
+ 
+2. 데이터 전처리 단계   
+-  필요한 변수 검토 및 전처리, 변수 간의 관계 분석 
+
+3. 데이터 분석 단계  
+-  새로운 요약 테이블 생성, 그래프 시각화 
+
+
+한국복지패널데이터
+```{r comment=NA,warning=FALSE}
+raw_welfare<-read.spss(file="./R_TEMP/Koweps_hpc10_2015_beta1.sav", #spss 파일 
+                      to.data.frame=T)                              #to.data.frame=T 
+welfare<-raw_welfare
+```
+
+```{r comment=NA}
+welfare<-rename(welfare,                #데이터
+               sex=h10_g3,              #성별 
+               birth=h10_g4,            #태어난 연도
+               marriage=h10_g10,        #혼인상태
+               income=p1002_8aq1,       #평균 월급
+               religion=h10_g11,        #종교 여부
+               code_job=h10_eco9,       #직종 코드
+               code_region=h10_reg7)    #지역 코드 
+```
+
+
+< 정제 변수 : sex, birth, income, age, ageg > 
+```{r include=FALSE}
+welfare$sex <-ifelse(welfare$sex==9,NA,welfare$sex)
+welfare$sex<-ifelse(welfare$sex == 1 ,'male','female')
+welfare$income<-ifelse(welfare$income %in% c(0,9999),NA,welfare$income)
+welfare$birth<-ifelse(welfare$birth==9999,NA,welfare$birth)
+welfare$age <- 2015 - welfare$birth +1
+welfare$income<-ifelse(welfare$income %in% c(0,9999),NA,welfare$income)
+age_income<-welfare %>% 
+  filter(!is.na(income)) %>%          
+  group_by(age) %>%                    
+  summarise(mean_income=mean(income))
+welfare <- welfare %>% mutate(ageg=ifelse(age < 30 ,"young",
+                                          ifelse(age<=59,"middle","old"))) 
+```
+
+--------------------------------------------------------------
+
+#### 사용 변수 전처리 단계 
+
+월급 income , 성별 sex, 나이 age  -> 전처리 완료
+1. 변수 검토
+2. 이상치 제거
+
+----
+#### 데이터 분석 단계
+나이와 성별에 따른 월급 평균표 
+```{r comment=NA}
+sex_age<-welfare %>% filter(!is.na(income)) %>% 
+  group_by(age,sex) %>% 
+  summarise(mean_income=mean(income))
+sex_age
+```
+
+
+나이 및 성별에 따른 월급 그래프 
+```{r comment=NA}
+ggplot(data=sex_age,aes(x=age,y=mean_income,col=sex))+           #col : line의 색 옵션
+  geom_line()
+```
+
+```{r comment=NA}
+ggplot(data=sex_age,aes(x=age,y=mean_income,col=sex,fill=sex))+ 
+  geom_col()
+```
+
+
+### 결과
+-> 나이와 성별에 따라 월급의 차이가 있으며 그 차이는 40~60세에서 그 차이가 크다.
+
+
+
+
+
+
+
+
+
+
+
+
