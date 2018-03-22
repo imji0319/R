@@ -1,6 +1,7 @@
 
 # clustering  -> kmeans of " stats " package  
 
+# cluseter : clusering function package
 install.packages("cluster")
 library(cluster)
 
@@ -30,3 +31,4 @@ d2[[2]]
 
 d2[[1]][[1]]
 str(d2)
+
