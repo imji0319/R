@@ -65,4 +65,20 @@ ggplot(delay,aes(dist, delay)) +
   geom_point(aes(size = count ), alpha = 1/2) + 
   geom_smooth() +
   scale_size_area()
+
+
+al <- group_by(hflights,Year, Month, DayofMonth)
+a2 <- select(al, Year : DayofMonth, ArrDelay, DepDelay)  
+a3 <- summarise(a2, arr= mean(ArrDelay, na.rm=TRUE),dep=mean(DepDelay,na.rm=TRUE))
+a4 <- filter(a3,arr > 30 | dep > 30)
+
+
+#dplyr의 chain 기능 
+
+hflights_df %>%  group_by(Year,Month,DayofMonth) %>% 
+  summarise(arr=mean(ArrDelay,na.rm=TRUE),
+            dep=mean(DepDelay,na.rm=TRUE)) %>%
+  filter( arr>30 | dep >30 )
   
+
+
