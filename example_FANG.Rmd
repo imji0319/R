@@ -1,0 +1,145 @@
+---
+title: 'FANG 데이터를 활용한 tidyqaunt Package 연습'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r include=FALSE}
+library(tidyquant)
+library(tidyverse)
+```
+
+
+## tidyquant 패키지 
+: quantmod 등 주식 분석을 주 목적으로 하는 중요 함수를 제공하는 패키지.  
+tidy data 개념을 활용한 데이터 핸들링, ggplot 과 연계된 차트그리기.  
+야후, 구글 및 독자적인 데이터 소스로 부터 필요한 데이터 손쉽게 가져오기.  
+성능 분석 함수들이 포함됨.
+
+### zoo, xts, quantmod, TTR, PerformanceAnalytics의 5개의 패키지 내의 함수를 지원 
+
+```{r}
+tq_transmute_fun_options() %>% str
+```
+
+#### zoo Functionality
+롤링마진 관련하여 기능을 작용하는 일반적인 기능을 하는 함수들 
+```{r}
+tq_transmute_fun_options()$zoo
+```
+
+#### xts Functionality
+시계열 데이터를 사용하기 위한 함수들 
+```{r}
+tq_transmute_fun_options()$xts
+```
+
+#### quantmod Functionality
+외부에서 가져오는 금융 데이터 처리, lag 등 금융 데이터 관리 도구 
+```{r}
+tq_transmute_fun_options()$quantmod
+```
+
+#### TTR Functionality
+기술 거래 규칙(Technical Trading Rules)을 구성하는 기능을 제공  
+```{r} 
+tq_transmute_fun_options()$TTR
+```
+
+#### PerformanceAnalytics Functionality
+assets, contraint 및 objectives 를 분리하고 모듈화하기 위한 포트폴리오 분석, 수익률 계산에 특화된 패키지
+```{r}
+tq_transmute_fun_options()$PerformanceAnalytics
+```
+
+* * *
+
+## Example 연습
+https://cran.r-project.org/web/packages/tidyquant/vignettes/TQ02-quant-integrations-in-tidyquant.html
+
+### DATA : FANG 
+**FANG** ( FB: Facebook, AMZN : Amazon, NELX : Netflix, GOOGL : google ) 
+2013년 ~ 2016년 까지의 주식 데이터  In USD  
+- symbol : 회사명  
+- date : 거래 날짜  
+- open : 시가, 시작 주가  
+- high : 고가, 거래날 가장 높은 주가  
+- low : 저가, 거래날 가장 낮은 주가  
+- close : 종가, 거래 종료 주가  
+- volume : 거래량  
+- adjusted : 조정된 주가 
+
+```{r}
+data("FANG")
+
+head(FANG)
+```
+
+* * *
+
+#### Example 1: Use quantmod periodReturn to Convert Prices to Returns
+The quantmod::periodReturn() function generates returns by periodicity.  
+주기별로 값을 타입별 계산하여 리턴값 반환
+
+- Period Return Functions: 
+  * Get the arithmetic or logarithmic returns for various periodicity, 
+  which include daily, weekly, monthly, quarterly, and yearly.
+  * Form: periodReturn(x, period = 'monthly', subset = NULL, type = 'arithmetic', leading = TRUE, ...)
+
+---
+
+##### Example 1A. Getting and Charting Annual Returns
+기업별로 연도별(period=yearly)의 조정된 주가(select = adjusted) 에 대한 연도 주기별 리턴값  
+type = "arithmetic" 의 산술 연산
+  
+```{r}
+FANG_anuual_returns <- FANG %>% 
+  group_by(symbol) %>% 
+  tq_transmute(select = adjusted, 
+               mutate_fun = periodReturn, #yearly.returns : 생성된 column 명 
+               period = "yearly",
+               type = "arithmetic")
+
+FANG_anuual_returns
+```
+
+
+**ggplot2 패키지를 활용한 차트 그리기**
+
+```{r}
+FANG_anuual_returns %>% 
+  ggplot(aes(x = date, y = yearly.returns, fill = symbol)) +
+  geom_col()+
+  geom_hline(yintercept = 0, color = palette_light()[[1]]) +
+  scale_y_continuous(labels = scales::percent ) +
+  labs ( title = " FANG : Anuual Returns ", 
+         subtitle = "Get annual returns quickly with tq_transmute!",
+         y = "Annual Returns", x = "")+
+  facet_wrap(~ symbol, ncol=2, scales = "free_y") +
+  theme_tq()+
+  scale_fill_tq()
+```
+연도별 조정 주가 그래프를 통해 확인 가능한 결과
+- 페이스북, 아마존, 넷플릭스, 구글 모두 2013년, 2015년 긍정적.
+- 페이스북은 2013년부터  0% 이상을 유지하고 있으나 그 값이 계속 하락세.
+- 그 외 아마존, 넷플릭스, 구글은 2013년 부터 2016년 까지 4년간 비슷한 양상. 
+
+
+
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
