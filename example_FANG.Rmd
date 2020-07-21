@@ -6,7 +6,7 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 
 ```
 
@@ -14,6 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyquant)
 library(tidyverse)
 ```
+
 
 
 ## tidyquant 패키지 
@@ -64,8 +65,9 @@ tq_transmute_fun_options()$PerformanceAnalytics
 https://cran.r-project.org/web/packages/tidyquant/vignettes/TQ02-quant-integrations-in-tidyquant.html
 
 ### DATA : FANG 
-**FANG** ( FB: Facebook, AMZN : Amazon, NELX : Netflix, GOOGL : google ) 
+**FANG** ( FB: Facebook, AMZN : Amazon, NELX : Netflix, GOOGL : google )   
 2013년 ~ 2016년 까지의 주식 데이터  In USD  
+
 - symbol : 회사명  
 - date : 거래 날짜  
 - open : 시가, 시작 주가  
@@ -83,18 +85,17 @@ head(FANG)
 
 * * *
 
-#### Example 1: Use quantmod periodReturn to Convert Prices to Returns
-The quantmod::periodReturn() function generates returns by periodicity.  
+### Example 1: Use quantmod periodReturn to Convert Prices to Returns
+The `quantmod::periodReturn()` function generates returns by periodicity.  
 주기별로 값을 타입별 계산하여 리턴값 반환
 
 - Period Return Functions: 
-  * Get the arithmetic or logarithmic returns for various periodicity, 
-  which include daily, weekly, monthly, quarterly, and yearly.
+  * Get the arithmetic or logarithmic returns for various periodicity, which include daily, weekly, monthly, quarterly, and yearly.
   * Form: periodReturn(x, period = 'monthly', subset = NULL, type = 'arithmetic', leading = TRUE, ...)
 
 ---
 
-##### Example 1A. Getting and Charting Annual Returns
+#### Example 1A. Getting and Charting Annual Returns
 기업별로 연도별(period=yearly)의 조정된 주가(select = adjusted) 에 대한 연도 주기별 리턴값  
 type = "arithmetic" 의 산술 연산
   
@@ -118,28 +119,279 @@ FANG_anuual_returns %>%
   geom_col()+
   geom_hline(yintercept = 0, color = palette_light()[[1]]) +
   scale_y_continuous(labels = scales::percent ) +
-  labs ( title = " FANG : Anuual Returns ", 
+  labs ( title = "FANG : Anuual Returns", 
          subtitle = "Get annual returns quickly with tq_transmute!",
          y = "Annual Returns", x = "")+
   facet_wrap(~ symbol, ncol=2, scales = "free_y") +
   theme_tq()+
   scale_fill_tq()
 ```
-연도별 조정 주가 그래프를 통해 확인 가능한 결과
-- 페이스북, 아마존, 넷플릭스, 구글 모두 2013년, 2015년 긍정적.
-- 페이스북은 2013년부터  0% 이상을 유지하고 있으나 그 값이 계속 하락세.
-- 그 외 아마존, 넷플릭스, 구글은 2013년 부터 2016년 까지 4년간 비슷한 양상. 
+**연도별 조정 주가 그래프를 통해 확인 가능한 결과**  
 
+- 페이스북, 아마존, 넷플릭스, 구글 모두 2013년, 2015년 긍정적.  
+- 페이스북은 2013년부터  0% 이상을 유지하고 있으나 그 값이 계속 하락세.  
+- 그 외 아마존, 넷플릭스, 구글은 2013년 부터 2016년 까지 4년간 비슷한 양상.   
 
+---
 
+#### Example 1B. Getting Daily Log Returns
+기업별로 일일(period = "daily") 조정 주가 (select = adjusted) 에 대한 주기별 로그(type= "log") 리턴값 
 
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+FANG_daily_log_returns <- FANG %>% 
+  group_by(symbol) %>% 
+  tq_transmute( select = adjusted ,
+                mutate_fun = periodReturn,
+                period = "daily",
+                type = "log") 
+                #col_renames = "" : 임의로 칼럼 이름 지정 가능  
+FANG_daily_log_returns
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+FANG_daily_log_returns %>% 
+  ggplot(aes(x = daily.returns, fill = symbol))+
+  geom_density(alpha = 0.5) +
+  labs(title = "FANG : Charting the Daily Log Returns",
+       x = "Daily.returns", y = "Density")+
+  theme_tq()+
+  scale_fill_tq()+
+  facet_wrap(~ symbol, ncol=2)
+```
+
+조정주가로 일별 로그값 계산했을 대 구글(GOOG)이 가장 높다는 것을 알 수 있음.  
+일일 로그값 순위 : 구글(GOOG) > 아마존(AMZN) > 페이스북(FB) > 넷플릭스(NFLX)
+
+---
+
+### Example 2: Use xts `to.period` to Change the Periodicity from Daily to Monthly
+
+The `xts::to.period` function is used for periodicity aggregation (converting from a lower level periodicity to a higher level such as minutes to hours or months to years).  
+낮은 수준의 주기에서 높은 수준의 주기로 변경하기 위해 사용되는 함수  
+월별 주기성을 계산하기 위해 to.period , period = "months" 활용
+```{r}
+FANG %>%  
+  group_by(symbol) %>% 
+  tq_transmute(select = open:volume,
+               mutate_fun = to.period,
+               period = "months")
+```
+
+#### With Periodity Aggregation : 일일 주기성 집계
+```{r}
+FANG_daily <- FANG %>% 
+  group_by(symbol)
+
+FANG_daily %>% 
+  ggplot(aes(x = date, y = adjusted, color= symbol)) +
+  geom_line(size =1) +
+  labs(title = "Daily Stock Prices",
+       x = "", y = "Adjusted Price", color="")+
+  facet_wrap (~ symbol, ncol=2, scales = "free_y")+
+  scale_y_continuous(labels = scales::dollar)+
+  theme_tq()+
+  scale_color_tq()
+```
+
+#### With Monthly Periodity Aggregation : 월별 주기성 집계
+```{r}
+FANG_monthly <- FANG %>% 
+  group_by(symbol) %>%
+  tq_transmute( select = adjusted,
+                mutate_fun = to.period,
+                period= "months")
+
+FANG_monthly %>% 
+  ggplot(aes(x = date, y = adjusted, color=symbol))+
+  geom_line(size =1)+
+  labs(title="Monthly Stock Prices",
+       x="", y ="Adjusted Price", color="")+
+  facet_wrap (~ symbol, ncol=2, scales = "free_y")+
+  scale_y_continuous(labels = scales::dollar) +
+  theme_tq()+
+  scale_color_tq()
+```
+
+**낮은 수준에서 높은 수준으로 주기성을 높일 경우 smooth한 그래프를 얻을 수 있음.**
+
+---
+
+### Example 3: Use TTR `runCor` to Visualize Rolling Correlations of Returns
+**이동 상관계수(rolling correlation): 시간의 흐름에 따른 자산 간 상관계수의 변화를 확인할 수 있다.**   
+이동 상관계수는 두 자산간 움직임을 측정하는데 반해 CS는 여러 자산 으로 구성된 포트폴리오의 변화를 측정하는 점에서 다르다.  
+
+  - Correlation surprise(CS) : 과거 상관계수 대비 자산간 움직임의 비정상 정도를 측정
+
+수익률 상관 관계는 자산이나 포트폴리오가 기준 지수나 펀드를 얼마나 가깝게 모방하는지 분석하는 일반적인 방법.  
+
+  - baseline 값으로 XLK 값 사용   
+  - XLK : Technology Select Sector SPDR Fund, 미국 IT 기술주  
+  - 관련된 내용 : <https://strikebell.tistory.com/74>  
+  - `tq_get()` 을 사용하여 "XLK" 가격 가져옴. 
+
+```{r}
+# Asset Returns 
+FANG_returns_monthly <- FANG %>% 
+  group_by(symbol) %>% 
+  tq_transmute(select = adjusted, 
+               mutate_fun = periodReturn,
+               period = "monthly") # xts 함수의 주기성 월 지정 : months
+
+# Baseline Returns 
+baseline_returns_monthly <- "XLK" %>% 
+  tq_get(get = "stock.prices",
+         from = "2013-01-01",
+         to = "2016-12-31") %>% 
+  tq_transmute(select = adjusted, 
+               mutate_fun = periodReturn,
+               period="monthly")
+
+baseline_returns_monthly
+```
+
+FANG return 값과 XLK 값을 JOIN
+```{r}
+returns_joined <- left_join(FANG_returns_monthly, 
+                            baseline_returns_monthly,
+                            by = "date") 
+returns_joined
+```
+
+
+The `TTR::runCor` function can be used to evaluate rolling correlations using the xy pattern.  
+
+  - `n = ?` 을 지정하여 롤링 상관계수의 크기를 지정 가능.   
+  - y : basement return 값
+
+```{r}
+FANG_rolling_corr <- returns_joined %>% 
+  tq_transmute_xy(x = monthly.returns.x,
+                  y = monthly.returns.y,
+                  mutate_fun = runCor,
+                  n = 6, # 6개월
+                  col_rename = "rolling.corr.6")
+
+FANG_rolling_corr
+```
+
+**FANG 조정 주가에 대한 6개월 간의 ROLLING CORRELATION 값 그래프**
+
+```{r}
+FANG_rolling_corr %>% 
+  ggplot(aes(x = date, y = rolling.corr.6, color = symbol)) +
+  geom_hline(yintercept = 0, color= palette_light()[[1]]) +
+  geom_line(size =1)+
+  labs ( title = "FANG : SIX MONTH Rolling Correlation to XLK",
+         x ="", y ="Correlation", color="") +
+  facet_wrap(~ symbol, ncol =2 )+
+  theme_tq()+
+  scale_color_tq()
+```
+
+---
+
+### Example 4: Use TTR MACD to Visualize Moving Average Convergence Divergence
+MACD : Moving Average Convergence Divergence, 이동평균의 수렴/확산
+
+- Moving Average (이동평균) : 전체 데이터 집합의 여러 하위 집합에 대한 일련의 평균을 만들어 데이터 요소를 분석하는 계산 ( = 이동산술평균 (Moving Mean) 또는 롤링산술평균(Rolling Mean) )
+- MACD : <https://www.investopedia.com/terms/m/macd.asp>
+- Form : MACD(x, nFast = 12, nSlow = 26, nSig = 9, maType, percent = TRUE, ...)
+- MACD 함수 설명 : <http://finzi.psych.upenn.edu/R/library/TTR/html/MACD.html>
+
+```{r}
+FANG_macd <- FANG %>% 
+  group_by(symbol) %>% 
+  tq_mutate(select = close,
+            mutate_fun = MACD,
+            nFast = 12, 
+            nSlow = 26, 
+            nSig= 9, 
+            maType=SMA) %>% #SMA : Simple moving average
+  mutate (diff = macd - signal) %>% 
+  select(-(open:volume))
+
+FANG_macd
+```
+
+
+**2016년 10월 1일 이후 이동평균 그래프** 
+```{r}
+FANG_macd %>%
+    filter(date >= as_date("2016-10-01")) %>%
+    ggplot(aes(x = date)) + 
+    geom_hline(yintercept = 0, color = palette_light()[[1]]) +
+    geom_line(aes(y = macd, col = symbol)) +
+    geom_line(aes(y = signal), color = "blue", linetype = 2) +
+    geom_bar(aes(y = diff), stat = "identity", color = palette_light()[[1]]) +
+    facet_wrap(~ symbol, ncol = 2, scale = "free_y") +
+    labs(title = "FANG: Moving Average Convergence Divergence",
+         y = "MACD", x = "", color = "") +
+    theme_tq() +
+    scale_color_tq()
+```
+
+---
+
+### Example 5: Use xts `apply.quarterly` to Get the Max and Min Price for Each Quarter
+The `xts::apply.quarterly()` function that is part of the period apply group can be used to apply functions by quarterly time segments.   
+
+- 분기별로 통계량 계산 등 함수 적용 가능. 
+- FUN = max : 최대값, FUN = min : 최소값 
+
+```{r}
+# 분기별 최대값 
+FANG_max_by_qtr <- FANG %>% 
+  group_by(symbol) %>% 
+  tq_transmute( select = adjusted, 
+                mutate_fun = apply.quarterly,
+                FUN = max, 
+                col_rename = "max.close") %>% 
+  mutate(year.qtr = paste0(year(date), "-Q", quarter(date))) %>%  
+  #paste0은 나열된 원소 사이에 공백없이 출력
+  select(-date)
+
+FANG_max_by_qtr
+
+# 분기별 최소값 
+FANG_min_by_qtr <- FANG %>% 
+  group_by(symbol) %>% 
+  tq_transmute( select = adjusted, 
+                mutate_fun = apply.quarterly,
+                FUN = min, 
+                col_rename = "min.close") %>% 
+  mutate(year.qtr = paste0(year(date), "-Q", quarter(date))) %>%  
+  #paste0은 나열된 원소 사이에 공백없이 출력
+  select(-date)
+
+FANG_min_by_qtr
+```
+
+분기별 최대값, 최소값 data frames 생성
+```{r}
+FANG_by_qtr <- left_join(FANG_max_by_qtr, FANG_min_by_qtr,
+                         by = c("symbol" = "symbol",
+                                "year.qtr" = "year.qtr"))
+
+FANG_by_qtr
+```
+
+**분기별 최대값과 최소값 그래프** 
+```{r}
+FANG_by_qtr %>%
+  ggplot(aes(x = year.qtr, color = symbol)) +
+  geom_segment(aes(xend = year.qtr, y = min.close, yend = max.close),
+               size = 1)+
+  geom_point(aes(y=max.close), size=2)+
+  geom_point(aes(y=min.close), size=2)+
+  facet_wrap(~ symbol, ncol=2, scale = "free_y")+
+  labs(title="FANG : MAX/MIN Price by Quarter", 
+       y = "Stock Price", color = "") +
+  theme_tq()+
+  scale_color_tq()+
+  scale_y_continuous(labels=scales::dollar)+
+  theme(axis.text.x = element_text(angle = 90, hjust =1), # 격자무늬 배경 
+        axis.title.x = element_blank())
+```
+
+
+
