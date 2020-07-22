@@ -1,5 +1,5 @@
 ---
-title: 'FANG 데이터를 활용한 tidyqaunt Package 연습'
+title: 'tidyqaunt Package 연습'
 output: html_document
 editor_options: 
   chunk_output_type: console
@@ -18,10 +18,10 @@ library(tidyverse)
 
 
 ## tidyquant 패키지 
-: quantmod 등 주식 분석을 주 목적으로 하는 중요 함수를 제공하는 패키지.  
-tidy data 개념을 활용한 데이터 핸들링, ggplot 과 연계된 차트그리기.  
-야후, 구글 및 독자적인 데이터 소스로 부터 필요한 데이터 손쉽게 가져오기.  
-성능 분석 함수들이 포함됨.
+- quantmod 등 주식 분석을 주 목적으로 하는 중요 함수를 제공하는 패키지.  
+- tidy data 개념을 활용한 데이터 핸들링, ggplot 과 연계된 차트그리기.  
+- 야후, 구글 및 독자적인 데이터 소스로 부터 필요한 데이터 손쉽게 가져오기.  
+- 성능 분석 함수들이 포함됨.
 
 ### zoo, xts, quantmod, TTR, PerformanceAnalytics의 5개의 패키지 내의 함수를 지원 
 
@@ -392,6 +392,152 @@ FANG_by_qtr %>%
   theme(axis.text.x = element_text(angle = 90, hjust =1), # 격자무늬 배경 
         axis.title.x = element_blank())
 ```
+
+### Example 6: Use zoo rollapply to visualize a rolling regression
+A good way to analyze relationships over time is using rolling calculations that compare two assets.   
+시간의 흐름에 따른 관계를 분석하기에 두 자산을 비교하는 롤링 계산을 이용하는 것이 제일 효과적이다.   
+
+In this example we will analyze two similar assets, Mastercard (MA) and Visa (V) to show the relationship via regression.
+
+- `tq_get()`을 활용하여 마스터카드(MA)와 비자(V)의 2년간(2015년 ~ 2016년)의 주가 데이터를 수집
+
+```{r}
+#Get Stock pairs 
+stock_prices <- c("MA", "V") %>% 
+  tq_get(get = "stock.prices",
+         from = "2015-01-01",
+         to = "2016-12-31") %>% 
+  group_by(symbol)
+
+stock_prices
+
+stock_pairs <- stock_prices %>% 
+  tq_transmute ( select = adjusted, 
+                 mutate_fun = periodReturn,
+                 period = "daily",
+                 type= "log",
+                 col_rename = "returns") %>% 
+  spread(key = symbol, value = returns) # 세로형 -> 가로형 데이터
+
+stock_pairs
+```
+
+**마스터카드와 비자의 관계 그래프**
+```{r}
+stock_pairs %>% 
+  ggplot(aes(x = V, y=MA))+
+  geom_point(color = palette_light()[[1]], alpha =0.5)+
+  geom_smooth(method = "lm") + # lm function
+  labs(title = "Visualizing Returns Relationship of Stock Pairs : MasterCard - VISA")+
+  theme_tq()
+```
+
+lm (linear Regression) 함수를 사용하여 두 자산 사이의 관계에 대한 통계값을 구할 수 있음.  
+
+```{r}
+lm(MA ~ V, data = stock_pairs ) %>% 
+  summary()
+```
+
+- Coefficients 의 Estimate 값이 0.812, **p-value < 0.05** 으로 둘 사이의 관계성이 없다는 귀무가설을 기각하고 둘 사이에는 긍정적인 관계성이 존재함을 확인 가능.
+- V의 주가가 증가할 경우 MA의 주가도 증가하는 경향이 있음.
+- 하지만 이러한 관계는 시간적 측면을 고려하지 못함. -> `zoo::rollapply` 를 사용하여 Rolling Regression 계산 
+
+##### Rolling Regression 계산을 위한 STEP with `tq_mutate()`
+1. Create a custom function
+  이때 중요한 것은 데이터의 형태가 `xts`의 객체로 전달되어야 하기 때문에 `timetk::tk_tbl`로 데이터를 변환하여 전달
+
+```{r}
+regr_fun <- function(data){
+  coef(lm(MA ~ V, data = timetk::tk_tbl(data, silent = TRUE)))
+}
+```
+
+2. Apply the function with `tq_mutate(mutate_fun = rollapply)`
+  `by.column = FALSE` 로 각 열이 아닌 전체 데이터에 함수가 적용되어 계산될 수 있도록 지정해주어야 함! 
+```{r}
+stock_pairs <- stock_pairs %>% 
+  tq_mutate(mutate_fun=rollapply,
+            width = 90, #90일 간격
+            FUN = regr_fun,
+            by.column = FALSE,
+            col_rename = c("coef.0", "coef.1"))
+stock_pairs
+```
+
+**Coefficient 계수 그래프**
+```{r}
+stock_pairs %>% 
+  ggplot(aes(x=date, y = coef.1)) +
+  geom_line(size =1, color =palette_light()[[1]])+
+  geom_hline(yintercept = 0.812, size = 1, color = palette_light()[[2]]) +
+  labs(title = "MA ~ V : Visualizing Rolling Regression Coefficient", x ="")+
+  theme_tq()
+```
+
+**기간동안의 주가 그래프**
+```{r}
+stock_prices %>% 
+  tq_transmute(adjusted,
+               periodReturn,
+               period = "daily",
+               type = "log",
+               col_rename="returns") %>% 
+  mutate(wealth.index = 100 * cumprod(1 + returns)) %>% # cumprod : Cumulative Products : 누적곱 
+  ggplot(aes(x = date, y= wealth.index, color = symbol)) +
+  geom_line(size =1) +
+  labs( title ="MA and V : Stock Prices")+
+  theme_tq()+
+  scale_color_tq()
+```
+
+
+### Example 7: Use `Return.clean` and `Return.excess` to clean and calculate excess returns 
+1. we calculate daily returns using `quantmod::periodReturn`. 
+2. we use Return. clean to clean outliers from the return data. The alpha parameter is the percentage of oultiers to be cleaned.  
+3. The excess returns are calculated using a risk-free rate of 3% (divided by 252 for 252 trade days in one year).
+
+  - `Return.clean` :  이상치를 제거하기 위한 함수, alpha 값을 통해 이상치의 정도를 지정 가능.  
+  <http://braverock.com/brian/R/PerformanceAnalytics/html/Return.clean.html>
+  - `Return.excess` : 위험 부담율을 초과하는 자산의 수익을 측정. 
+  <http://braverock.com/brian/R/PerformanceAnalytics/html/Return.excess.html>
+
+```{r}
+FANG %>%
+    group_by(symbol) %>%
+    tq_transmute(adjusted, periodReturn, period = "daily") %>%
+    tq_transmute(daily.returns, Return.clean, alpha = 0.05) %>%
+    tq_transmute(daily.returns, Return.excess, 
+                 Rf = 0.03 / 252, col_rename ="returns") %>% 
+    filter(date >= as_date("2016-10-01")) %>%
+    ggplot(aes(x = date, y=returns, color = symbol)) +
+    geom_hline(yintercept=0, color=palette_light()[[1]]) +
+    geom_line(size = 1) +
+    facet_wrap(~ symbol, ncol = 2) +
+    labs(title = "Return VS. RF rate", x="")+
+    theme_tq()+
+    scale_color_tq()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
